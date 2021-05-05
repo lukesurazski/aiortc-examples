@@ -17,8 +17,13 @@ from aiortc.contrib.media import MediaPlayer, MediaRecorder
 
 pcs = set()
 channels = {}
+
+# the rx datachannel receives messages from the server and is created by the subscriber code block
 channels["rx"] = None
+# the tx datachannel sends messages to the server and is created by the publisher code block
 channels["tx"] = None
+
+time_start = None
 
 ##### Data Channel Code
 def channel_log(channel, t, message):
@@ -226,7 +231,7 @@ async def subscribe(session, room, feed, recorder, create_dc=False):
         async def on_message(message):
             # this is where we get data (ie. control messages) back from the server
             # these messages are basically our "remote control" events
-            channel_log(channel, "0", message)
+            channel_log(channel, current_stamp(), message)
 
             #echo back just for fun
             global channels
