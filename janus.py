@@ -16,6 +16,9 @@ from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack
 from aiortc.contrib.media import MediaPlayer, MediaRecorder
 
 pcs = set()
+channels = {}
+channels["rx"] = None
+channels["tx"] = None
 
 ##### Data Channel Code
 def channel_log(channel, t, message):
@@ -160,6 +163,9 @@ async def publish(plugin, player):
     pc = RTCPeerConnection()
     pcs.add(pc)
 
+    global channels
+    channels["tx"] = pc.createDataChannel("JanusDataChannel")
+
     # configure media
     media = {"audio": False, "video": True, "data": True}
     if player and player.audio:
@@ -200,6 +206,7 @@ async def subscribe(session, room, feed, recorder, create_dc=False):
 
     if create_dc:
         channel = pc.createDataChannel("chat")
+        channels["rx"] = channel
 
         @channel.on("open")
         async def on_open():
@@ -208,18 +215,22 @@ async def subscribe(session, room, feed, recorder, create_dc=False):
     @pc.on("track")
     async def on_track(track):
         print("Track %s received" % track.kind)
-        if track.kind == "video":
+        if track.kind == "video" and recorder is not None:
             recorder.addTrack(track)
-        if track.kind == "audio":
+        if track.kind == "audio" and recorder is not None:
             recorder.addTrack(track)
 
-        @pc.on('datachannel')
-        async def on_datachannel(channel):
-            @channel.on("message")
-            async def on_message(message):
-                # this is where we get data (ie. control messages) back from the server
-                # these messages are basically our "remote control" events
-                print("received a message %s!" % message)
+    @pc.on('datachannel')
+    async def on_datachannel(channel):
+        @channel.on("message")
+        async def on_message(message):
+            # this is where we get data (ie. control messages) back from the server
+            # these messages are basically our "remote control" events
+            channel_log(channel, "0", message)
+
+            #echo back just for fun
+            global channels
+            channel_send(channels["tx"], message)
 
     # subscribe
     plugin = await session.attach("janus.plugin.videoroom")
@@ -246,7 +257,8 @@ async def subscribe(session, room, feed, recorder, create_dc=False):
             },
         }
     )
-    await recorder.start()
+    if recorder is not None:
+        await recorder.start()
 
 
 async def run(player, recorder, room, session):
@@ -273,7 +285,7 @@ async def run(player, recorder, room, session):
     await publish(plugin=plugin, player=player)
 
     # receive video
-    if recorder is not None and publishers:
+    if publishers:
         await subscribe(
             session=session, room=room, feed=publishers[0]["id"], recorder=recorder, create_dc=True
         )
