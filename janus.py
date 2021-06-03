@@ -25,6 +25,7 @@ channels["tx"] = None
 
 time_start = None
 
+
 ##### Data Channel Code
 def channel_log(channel, t, message):
     print("channel(%s) %s %s" % (channel.label, t, message))
@@ -266,7 +267,7 @@ async def subscribe(session, room, feed, recorder, create_dc=False):
         await recorder.start()
 
 
-async def run(player, recorder, room, session):
+async def run(player, recorder, room, session, ttr):
 
     await session.create()
 
@@ -297,7 +298,7 @@ async def run(player, recorder, room, session):
 
     # exchange media for 10 minutes
     print("Exchanging media")
-    await asyncio.sleep(600)
+    await asyncio.sleep(ttr)
 
 
 if __name__ == "__main__":
@@ -312,6 +313,7 @@ if __name__ == "__main__":
     parser.add_argument("--play-from", help="Read the media from a file and sent it."),
     parser.add_argument("--record-to", help="Write received media to a file."),
     parser.add_argument("--verbose", "-v", action="count")
+    parser.add_argument("--time-to-run", "-t", type=int, default=3000)
     args = parser.parse_args()
 
     if args.verbose:
@@ -337,7 +339,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     try:
         loop.run_until_complete(
-            run(player=player, recorder=recorder, room=args.room, session=session)
+            run(player=player, recorder=recorder, room=args.room, session=session, ttr=args.time_to_run)
         )
     except KeyboardInterrupt:
         pass
