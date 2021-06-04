@@ -86,6 +86,7 @@ class JanusPlugin:
         self._queue = asyncio.Queue()
         self._session = session
         self._url = url
+        self._waiting = False # Luke: todo, should be some sort of mutex
 
     async def send(self, payload):
         message = {"janus": "message", "transaction": transaction_id()}
@@ -94,10 +95,20 @@ class JanusPlugin:
             data = await response.json()
             assert data["janus"] == "ack"
 
+        self._waiting = True
         response = await self._queue.get()
+        self._waiting = False
         assert response["transaction"] == message["transaction"]
         return response
 
+    def recv(self):
+        if self._waiting:
+            return None
+        try:
+            msg = self._queue.get_nowait()
+            return msg
+        except:
+            return None
 
 class JanusSession:
     def __init__(self, url):
@@ -153,7 +164,7 @@ class JanusSession:
             params = {"maxev": 1, "rid": int(time.time() * 1000)}
             async with self._http.get(self._session_url, params=params) as response:
                 data = await response.json()
-                print(data)
+                print("_poll: %s" % data)
                 if data["janus"] == "event":
                     plugin = self._plugins.get(data["sender"], None)
                     if plugin:
@@ -236,7 +247,7 @@ async def subscribe(session, room, feed, recorder, create_dc=False):
 
             #echo back just for fun
             global channels
-            channel_send(channels["tx"], message)
+            #channel_send(channels["tx"], message)
 
     # subscribe
     plugin = await session.attach("janus.plugin.videoroom")
@@ -296,10 +307,27 @@ async def run(player, recorder, room, session, ttr):
             session=session, room=room, feed=publishers[0]["id"], recorder=recorder, create_dc=True
         )
 
-    # exchange media for 10 minutes
-    print("Exchanging media")
-    await asyncio.sleep(ttr)
+    count = ttr
+    while count > 0:
+        msg = plugin.recv()
+        if msg is not None:
+            print("Received a message!");
+            try:
+                publishers = msg["plugindata"]["data"]["publishers"]
+                for publisher in publishers:
+                    print("id: %(id)s, display: %(display)s" % publisher)
 
+                if publishers:
+                    await subscribe(
+                        session=session, room=room, feed=publishers[0]["id"], recorder=recorder, create_dc=True
+                    )
+            except:
+                #do nothing
+        else:
+            # no message
+
+        await asyncio.sleep(1)
+        count -= 1
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Janus")
