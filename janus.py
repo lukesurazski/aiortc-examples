@@ -1,3 +1,5 @@
+# python3 janus.py http://gophor.me:8088/janus --room 1234 --play-from opencv -t 6000
+
 import argparse
 import asyncio
 import logging
@@ -311,7 +313,6 @@ async def run(player, recorder, room, session, ttr):
     while count > 0:
         msg = plugin.recv()
         if msg is not None:
-            print("Received a message!");
             try:
                 publishers = msg["plugindata"]["data"]["publishers"]
                 for publisher in publishers:
@@ -323,8 +324,10 @@ async def run(player, recorder, room, session, ttr):
                     )
             except:
                 #do nothing
+                pass
         else:
             # no message
+            pass
 
         await asyncio.sleep(1)
         count -= 1
